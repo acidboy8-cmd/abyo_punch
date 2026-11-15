@@ -14,6 +14,10 @@
   #hudRow{display:flex;justify-content:space-between;align-items:center;font-weight:800}
   #stageLbl{font-size:15px;letter-spacing:.08em;color:#c9cdf0}
   #progLbl{font-size:13px;color:#8d93bd;font-variant-numeric:tabular-nums}
+  #livesLbl{text-align:center;height:22px;margin-top:6px;font-size:20px;line-height:22px;letter-spacing:2px;color:#ff4d6d;text-shadow:0 2px 0 rgba(0,0,0,.4)}
+  #livesLbl.pop{animation:cpop .3s ease-out}
+  #livesLbl.hurt{animation:lhurt .4s ease-out}
+  @keyframes lhurt{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
   #scoreLbl{text-align:center;font-size:56px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.1;margin-top:4px;text-shadow:0 4px 0 rgba(0,0,0,.35)}
   #comboBox{text-align:center;height:30px;line-height:30px;font-weight:900;font-size:20px;color:#ffd166;opacity:0;transition:opacity .15s,color .15s;text-shadow:0 2px 0 rgba(0,0,0,.5)}
   #comboBox.on{opacity:1}
@@ -169,6 +173,7 @@
   <canvas id="cv"></canvas>
   <div id="hud">
     <div id="hudRow"><div id="stageLbl">STAGE 1</div><div id="progLbl">0 / 25</div></div>
+    <div id="livesLbl"></div>
     <div id="scoreLbl">0</div>
     <div id="comboBox"><span class="cn">0</span> COMBO <span class="mul">x1</span></div>
   </div>
@@ -230,15 +235,16 @@
   }
   const RULES = {
     2: '반쪽씩 칠한 판자가 뒤집히면 왼손·오른손 색이 바뀌어요',
-    3: '? 문은 바로 앞에 와야 진짜 색이 보여요',
+    3: '? 문은 가까이 오면 진짜 색이 보여요',
     5: '게이지가 더 빨리 줄어요!',
   };
 
   // ---------- 상태 ----------
   let state = 'title', started = false;
   let stage = 1, score = 0, passed = 0, pause = 0, crawl = 0, missing = false;
-  let combo = 0, maxCombo = 0, broken = 0, lastHitT = 0, intervals = [];
-  const MISS = 0.65;   // 맨 앞 판자가 이만큼 다가오면 몸에 닿음
+  let lives = 0, combo = 0, maxCombo = 0, broken = 0, lastHitT = 0, intervals = [];
+  const MISS = 0.65;
+  const LIFE_COMBO = 15, MAX_LIVES = 5;   // 콤보 15마다 목숨 +1 (최대 5개)   // 맨 앞 판자가 이만큼 다가오면 몸에 닿음
   let queue = [], offset = 0, swapped = false, sinceSwap = 0, made = 0;
   let debris = [], waves = [], hits = [], splinters = [], dust = [], flips = [], hitstop = 0;
   let parts = [], shake = 0, flash = 0, bannerT = 0, deathMsg = '';
@@ -307,7 +313,13 @@
     const ref = intervals.reduce((a, b) => a + b, 0) / intervals.length;
     if (Math.abs(dt - ref) <= Math.max(0.05, ref * 0.22)) {
       combo++; intervals.push(dt); if (intervals.length > 4) intervals.shift();
-      if (combo % 8 === 0) showBanner('리듬 x' + comboMul() + '!', '점수 ' + comboMul() + '배', 0.8);
+      if (combo % LIFE_COMBO === 0) {
+        if (lives < MAX_LIVES) {
+          lives++; livesFx('pop');
+          showBanner('❤ 목숨 +1', combo + ' 콤보 달성!', 1.0);
+          beep(784, 0.08, 'triangle', 0.06); setTimeout(() => beep(1175, 0.16, 'triangle', 0.06), 80);
+        }
+      } else if (combo % 8 === 0) showBanner('리듬 x' + comboMul() + '!', '점수 ' + comboMul() + '배', 0.8);
     } else { breakCombo(); combo = 1; lastHitT = now; }
   }
 
@@ -315,7 +327,10 @@
     $stage.textContent = 'STAGE ' + stage;
     $prog.textContent = passed + ' / ' + cfg(stage).goal;
     $score.textContent = score;
+    $lives.textContent = '❤'.repeat(lives);
   }
+  const $lives = document.getElementById('livesLbl');
+  function livesFx(cls) { $lives.classList.remove('pop', 'hurt'); void $lives.offsetWidth; $lives.classList.add(cls); }
 
   function makeItem() {
     const c = cfg(stage);
@@ -331,17 +346,20 @@
     return {type: 'door', real, color: fake ? other(real) : real, fake, revealed: !fake, flash: 0, seed: Math.random() * 10};
   }
   function fill() { while (queue.length < 12) queue.push(makeItem()); }
+  const REVEAL_AT = 2;   // 앞에서 몇 번째 판자까지 진짜 색을 보여줄지 (예전엔 1 = 바로 앞만)
   function reveal() {
-    const d = queue[0];
-    if (d && d.type === 'door' && !d.revealed) {
-      d.revealed = true; d.color = d.real; d.flash = 1;
-      beep(300, 0.08, 'triangle', 0.05, 250);
+    for (let i = 0; i < REVEAL_AT && i < queue.length; i++) {
+      const d = queue[i];
+      if (d && d.type === 'door' && !d.revealed) {
+        d.revealed = true; d.color = d.real; d.flash = 1;
+        beep(300, 0.08, 'triangle', 0.05, 250);
+      }
     }
   }
 
   function startGame() {
     stage = 1; score = 0; passed = 0; pause = 0; crawl = 0; missing = false; started = false;
-    combo = 0; maxCombo = 0; broken = 0; lastHitT = 0; intervals = []; comboUI();
+    lives = 0; combo = 0; maxCombo = 0; broken = 0; lastHitT = 0; intervals = []; comboUI();
     queue = []; offset = 0; swapped = false; sinceSwap = 0; made = 0; parts = [];
     debris = []; waves = []; hits = []; splinters = []; dust = []; flips = [];
     player.color = RED;
@@ -426,6 +444,7 @@
       osc(n, 0, 'triangle', 2050 * p, 1850 * p, 0.035, 0.18);
       for (let k = 0; k < 5; k++)                                                    // 파편 탁탁
         nz(n, 0.014 + k * 0.013 + Math.random() * 0.006, 0.012, 'highpass', 2800 + Math.random() * 3500, 2400, 0.7, 0.3, true);
+      woodCrack(n, p);
       if (comboN >= 2) {
         const i = Math.min(comboN - 2, 14), semi = SCALE[i % 5] + 12 * Math.floor(i / 5);
         const f = (isBlue ? 392 : 523.25) * Math.pow(2, semi / 12);
@@ -433,6 +452,37 @@
         osc(n, 0.008, 'sine', f * 2, f * 2, 0.1, 0.08, true);
       }
     } catch (e) {}
+  }
+  // 나무가 '쩌억-' 하고 쪼개지는 소리 (세게): 날카로운 균열음 + 우지끈 갈라지는 잔파열 + 묵직한 나무 몸통 울림
+  let crackShaper = null;
+  function woodCrack(n, p) {
+    if (!crackShaper) {
+      crackShaper = ac.createWaveShaper();
+      const c = new Float32Array(1024);
+      for (let i = 0; i < 1024; i++) { const x = i / 511.5 - 1; c[i] = Math.tanh(x * 3.5); }
+      crackShaper.curve = c;
+      const g = ac.createGain(); g.gain.value = 0.85;
+      crackShaper.connect(g); out(g, true);
+    }
+    const burst = (at, dur, f, q, vol) => {                // 찌그러뜨린 짧은 노이즈 한 조각
+      const src = ac.createBufferSource(); src.buffer = noiseBuf;
+      const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = q;
+      bp.frequency.setValueAtTime(f, n + at); bp.frequency.exponentialRampToValueAtTime(f * 0.6, n + at + dur);
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0.0001, n + at); g.gain.exponentialRampToValueAtTime(vol, n + at + 0.001);
+      g.gain.exponentialRampToValueAtTime(0.0001, n + at + dur);
+      src.connect(bp); bp.connect(g); g.connect(crackShaper);
+      src.start(n + at, Math.random() * 0.4, dur + 0.02);
+    };
+    burst(0, 0.07, 2200 * p, 1.2, 1.6);                     // 쩍! (메인 균열)
+    burst(0.004, 0.11, 900 * p, 1.5, 1.2);                  // 쩌억 (중음 갈라짐)
+    let t = 0.03;
+    for (let k = 0; k < 7; k++) {                           // 우지끈 (결 따라 갈라지는 잔파열)
+      burst(t, 0.018 + Math.random() * 0.02, 1200 + Math.random() * 2600, 2, 0.9 * (1 - k / 9));
+      t += 0.012 + Math.random() * 0.02;
+    }
+    osc(n, 0, 'triangle', 165 * p, 75, 0.16, 0.55);         // 묵직한 나무 몸통 '쿵'
+    osc(n, 0.002, 'square', 480 * p, 300 * p, 0.04, 0.12); // 판자 '딱' 공명 강화
   }
   function comboBreakSound() {
     try { const n = audio(); osc(n, 0, 'square', 330, 160, 0.18, 0.08, true); } catch (e) {}
@@ -508,7 +558,7 @@
 
     if (side === 0) player.chopL = 1; else player.chopR = 1;
     const d = queue[0];
-    if (col !== d.color) { d.flash = 1; die('색이 달랐어요!'); return; }
+    if (col !== d.color) { d.flash = 1; if (lives > 0) hurt(); else die('색이 달랐어요!'); return; }
 
     // 돌파!
     rhythmHit(performance.now());
@@ -519,7 +569,13 @@
     score += comboMul(); passed++; broken++;
     comboUI(combo >= 2);
     player.hop = 1;
+    advance();
+    if (passed >= cfg(stage).goal) stageUp();
+    hud();
+  }
 
+  // 맨 앞 판자를 치우고 다음 판자로 (반전 판자 처리 포함)
+  function advance() {
     while (queue[0].type === 'swap') {
       queue.shift(); offset += 1;
       flips.push({t: 0, L: leftColor(), R: rightColor()});
@@ -530,7 +586,21 @@
       swapSound();
     }
     fill(); reveal();
-    if (passed >= cfg(stage).goal) stageUp();
+  }
+
+  // 목숨이 있으면 게임오버 대신 하나 잃고 계속
+  function hurt() {
+    lives--; livesFx('hurt');
+    shake = 0.35; flash = 0.6;
+    burst(W / 2, PY(), '#ff4d6d', 18, 320);
+    beep(200, 0.25, 'sawtooth', 0.06, -100);
+    if (combo >= 3) breakCombo(); else { combo = 0; intervals = []; }
+    comboUI();
+    queue.shift();
+    offset = offset - crawl + 1; crawl = 0;
+    advance();
+    pause = Math.max(pause, 0.4);   // 목숨 잃은 뒤 쉬는 시간
+    showBanner('목숨 -1', lives ? '❤ ' + lives + '개 남음' : '마지막 기회!', 0.8);
     hud();
   }
 
@@ -564,7 +634,6 @@
     saveBest();
     lastRun = {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), score, stage, registered: false};
     if (myName && score > 0) register(myName);   // 이름이 있으면 자동 등록
-    else loadShared();
     setTimeout(() => showOverlay('over', isBest), miss ? 1000 : 700);
   }
 
@@ -574,7 +643,7 @@
       if (pause > 0) pause -= dt;
       else if (offset < 0.05) {                       // 당겨지는 중에는 멈춤
         crawl += cfg(stage).speed * dt;
-        if (crawl >= MISS) die('놓쳤어요!', true);
+        if (crawl >= MISS) { if (lives > 0) hurt(); else die('놓쳤어요!', true); }
       }
     }
     if (state === 'play' && combo >= 2 && intervals.length) {
@@ -812,7 +881,8 @@
   }
 
   // s: -1 왼손, 1 오른손 / (x, y): 손목 / rot: 손끝 방향(위=0) / sc: 크기
-  function drawArm(s, x, y, rot, sc, col, alpha) {
+  // edge: 0 = 손등이 보임, 1 = 손을 세워 손날(새끼손가락 쪽)로 내려침
+  function drawArm(s, x, y, rot, sc, col, alpha, edge = 0) {
     const L = H * 0.16 * sc, Wd = L * 0.4;
     ctx.save(); ctx.globalAlpha = alpha;
     ctx.translate(x, y); ctx.rotate(rot);
@@ -823,9 +893,9 @@
     ctx.beginPath(); ctx.moveTo(-fw0 / 2, 0); ctx.lineTo(fw0 / 2, 0); ctx.lineTo(fw1 / 2, fa); ctx.lineTo(-fw1 / 2, fa); ctx.closePath(); ctx.fill();
 
     // 손 부분만 크게 (붕대·팔뚝 크기는 그대로)
-    const HL = L * 1.4, HW = Wd * 1.45;
-    // 엄지 (안쪽에 붙임)
-    ctx.save();
+    const HL = L * 1.4, HW = Wd * 1.45 * (1 - 0.35 * edge);   // 손을 세우면 손 부분만 좁아짐 (손목·팔 굵기는 그대로)
+    // 엄지 (안쪽에 붙임) — 손을 세우면 손 뒤로 숨음
+    ctx.save(); ctx.globalAlpha = alpha * Math.max(0, 1 - edge * 1.4);
     ctx.translate(-s * HW * 0.44, -HL * 0.36); ctx.rotate(-s * 0.35);
     ctx.fillStyle = sideGrad(HW * 0.5, s, SKIN.hi, SKIN.mid, SKIN.lo);
     rr(-HW * 0.2, -HL * 0.28, HW * 0.4, HL * 0.42, HW * 0.2); ctx.fill();
@@ -842,7 +912,8 @@
     ctx.lineTo(HW * 0.5, -HL * 0.32);
     ctx.quadraticCurveTo(HW * 0.52, -HL * 0.12, Wd / 2, 0);
     ctx.closePath(); ctx.fill();
-    // 손가락 사이 선
+    // 손가락 사이 선 (손등이 보일 때만)
+    ctx.save(); ctx.globalAlpha = alpha * Math.max(0, 1 - edge * 1.5);
     ctx.strokeStyle = SKIN.line; ctx.lineWidth = Math.max(1, HL * 0.012); ctx.lineCap = 'round';
     for (const k of [-0.2, 0.05, 0.28]) {
       ctx.beginPath(); ctx.moveTo(k * HW, -HL * 0.98 + Math.abs(k) * HL * 0.12); ctx.lineTo(k * HW * 1.05, -HL * 0.56); ctx.stroke();
@@ -853,6 +924,33 @@
     // 하이라이트
     ctx.fillStyle = 'rgba(255,255,255,.28)';
     ctx.beginPath(); ctx.ellipse(-s * HW * 0.22, -HL * 0.62, HW * 0.09, HL * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    // 손날: 손을 세우면 새끼손가락 쪽 옆면이 보이고, 그 끝선으로 내려침
+    if (edge > 0.02) {
+      ctx.save();
+      ctx.beginPath();                               // 손 윤곽으로 잘라 그림
+      ctx.moveTo(-Wd / 2, 0);
+      ctx.quadraticCurveTo(-HW * 0.52, -HL * 0.12, -HW * 0.5, -HL * 0.32);
+      ctx.lineTo(-HW * 0.48, -HL * 0.82);
+      ctx.quadraticCurveTo(-HW * 0.46, -HL * 1.0, 0, -HL * 1.02);
+      ctx.quadraticCurveTo(HW * 0.46, -HL * 1.0, HW * 0.48, -HL * 0.8);
+      ctx.lineTo(HW * 0.5, -HL * 0.32);
+      ctx.quadraticCurveTo(HW * 0.52, -HL * 0.12, Wd / 2, 0);
+      ctx.closePath(); ctx.clip();
+      // 옆면 음영: 손등 쪽은 그늘, 손날 쪽은 빛
+      const g = ctx.createLinearGradient(s * HW * 0.5, 0, -s * HW * 0.5, 0);
+      g.addColorStop(0, 'rgba(110,50,25,.55)'); g.addColorStop(0.55, 'rgba(110,50,25,.12)'); g.addColorStop(1, 'rgba(255,235,215,.25)');
+      ctx.globalAlpha = alpha * edge; ctx.fillStyle = g; ctx.fillRect(-HW, -HL * 1.1, HW * 2, HL * 1.2);
+      // 손가락을 붙여 세운 마디선 (옆에서 본 모습)
+      ctx.strokeStyle = 'rgba(120,60,30,.35)'; ctx.lineWidth = Math.max(1, HL * 0.014); ctx.lineCap = 'round';
+      for (const k of [0.62, 0.8]) { ctx.beginPath(); ctx.moveTo(-HW * 0.45, -HL * k); ctx.quadraticCurveTo(0, -HL * (k + 0.03), HW * 0.45, -HL * k); ctx.stroke(); }
+      // 손날 끝선 (부딪히는 부분) — 살짝 붉게 눌린 피부
+      ctx.strokeStyle = 'rgba(225,95,80,.75)'; ctx.lineWidth = HW * 0.12;
+      ctx.beginPath(); ctx.moveTo(-s * HW * 0.5, -HL * 0.18); ctx.lineTo(-s * HW * 0.49, -HL * 0.82);
+      ctx.quadraticCurveTo(-s * HW * 0.46, -HL * 1.0, -s * HW * 0.1, -HL * 1.02); ctx.stroke();
+      ctx.restore();
+    }
 
     // 컬러 테이핑: 손목→손바닥 굴곡을 따라 감김 (손·팔 윤곽 안으로 잘라 그림)
     const t0 = -HL * 0.5, t1 = L * 0.4;
@@ -912,14 +1010,16 @@
       const pose = k => {
         const e = k > 0.65 ? 1 : 1 - Math.pow(1 - k / 0.65, 2);
         const m = (a, b) => a + (b - a) * e;
-        return {x: m(rest.x, strike.x), y: m(rest.y, strike.y), rot: m(rest.rot, strike.rot), sc: m(rest.sc, strike.sc)};
+        // 칠 때는 손을 세워 손날로, 돌아오면서 다시 손등이 보이게
+        return {x: m(rest.x, strike.x), y: m(rest.y, strike.y), rot: m(rest.rot, strike.rot), sc: m(rest.sc, strike.sc),
+                edge: Math.min(1, k / 0.45)};
       };
       if (c > 0.35) for (const back of [0.3, 0.15]) {
         const p = pose(Math.max(0, c - back));
-        drawArm(s, p.x, p.y, p.rot, p.sc, col, 0.15);
+        drawArm(s, p.x, p.y, p.rot, p.sc, col, 0.15, p.edge);
       }
       const p = pose(c);
-      drawArm(s, p.x, p.y, p.rot, p.sc, col, 1);
+      drawArm(s, p.x, p.y, p.rot, p.sc, col, 1, p.edge);
     }
   }
 
@@ -997,39 +1097,6 @@
   let db = null, uid = null, sharedRank = null, myShared = null, sharedWritable = true;
   let lastRun = null;
 
-  // ---------- Supabase 전체 랭킹 (Vercel 등 일반 웹 주소에서 사용) ----------
-  // Supabase 대시보드 → Project Settings → API 의 Project URL 과 anon public 키를 넣으세요.
-  const SUPABASE_URL = 'https://wabpkvsgzxuktwqitdfn.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable_PnvqHR7k0M7ZtoUTo3WIgA_0g_Qoc3X';
-  const inClaude = !!(window.claude && window.claude.use);
-  const sb = !inClaude && SUPABASE_URL && SUPABASE_KEY;
-  let playerId = '';
-  try { playerId = localStorage.getItem('colorgate-pid') || ''; } catch (e) {}
-  if (!playerId) {
-    playerId = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
-    try { localStorage.setItem('colorgate-pid', playerId); } catch (e) {}
-  }
-  function sbFetch(path, opts = {}) {
-    return fetch(SUPABASE_URL.replace(/\/$/, '') + '/rest/v1/' + path, Object.assign({}, opts, {
-      // 예전 anon 키(eyJ…)는 Authorization 헤더도 함께, 새 publishable 키(sb_publishable_…)는 apikey 헤더만 사용
-      headers: Object.assign({apikey: SUPABASE_KEY, 'Content-Type': 'application/json'},
-        SUPABASE_KEY.startsWith('eyJ') ? {Authorization: 'Bearer ' + SUPABASE_KEY} : {}, opts.headers || {}),
-    }));
-  }
-  async function loadShared() {
-    if (!sb) return;
-    try {
-      const r = await sbFetch('punch_rank?select=player_id,name,score,stage&order=score.desc&limit=100');
-      if (!r.ok) return;
-      const rows = await r.json();
-      sharedRank = rows.map(x => ({id: x.player_id, name: x.name, score: x.score, stage: x.stage}));
-      uid = playerId;
-      myShared = sharedRank.find(x => x.id === playerId) || myShared;
-      refreshRank();
-    } catch (e) {}
-  }
-  if (sb) loadShared();
-
   (async () => {   // 공유 순위 저장소 (안 되면 이 기기 순위만 사용)
     try {
       if (!window.claude || !window.claude.use) return;
@@ -1060,19 +1127,7 @@
     localRank = localRank.slice(0, 30); saveLocal();
     lastRun.registered = true;
     refreshRank();
-    if (sb) {
-      // 더 높은 점수이거나 이름을 바꿨을 때만 한 줄 추가 (랭킹은 사람마다 최고 점수 + 최신 이름)
-      const prev = myShared ? (+myShared.score || 0) : -1;
-      if (lastRun.score > prev || (myShared && myShared.name !== name)) {
-        const best = Math.max(lastRun.score, prev);
-        const body = {player_id: playerId, name, score: best, stage: best === lastRun.score ? lastRun.stage : (+myShared.stage || 1), max_combo: maxCombo};
-        try {
-          const r = await sbFetch('punch_scores', {method: 'POST', headers: {Prefer: 'return=minimal'}, body: JSON.stringify(body)});
-          if (r.ok) myShared = {id: playerId, name, score: best, stage: body.stage};
-        } catch (e) {}
-        loadShared();
-      }
-    } else if (db && uid && sharedWritable) {
+    if (db && uid && sharedWritable) {
       const prev = myShared ? (+myShared.score || 0) : -1;
       let body = null;
       if (lastRun.score > prev) body = {name, score: lastRun.score, stage: lastRun.stage, at: Date.now()};
