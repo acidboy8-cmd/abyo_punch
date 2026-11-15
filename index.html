@@ -564,6 +564,7 @@
     saveBest();
     lastRun = {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), score, stage, registered: false};
     if (myName && score > 0) register(myName);   // 이름이 있으면 자동 등록
+    else loadShared();
     setTimeout(() => showOverlay('over', isBest), miss ? 1000 : 700);
   }
 
@@ -996,6 +997,39 @@
   let db = null, uid = null, sharedRank = null, myShared = null, sharedWritable = true;
   let lastRun = null;
 
+  // ---------- Supabase 전체 랭킹 (Vercel 등 일반 웹 주소에서 사용) ----------
+  // Supabase 대시보드 → Project Settings → API 의 Project URL 과 anon public 키를 넣으세요.
+  const SUPABASE_URL = 'https://wabpkvsgzxuktwqitdfn.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_PnvqHR7k0M7ZtoUTo3WIgA_0g_Qoc3X';
+  const inClaude = !!(window.claude && window.claude.use);
+  const sb = !inClaude && SUPABASE_URL && SUPABASE_KEY;
+  let playerId = '';
+  try { playerId = localStorage.getItem('colorgate-pid') || ''; } catch (e) {}
+  if (!playerId) {
+    playerId = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    try { localStorage.setItem('colorgate-pid', playerId); } catch (e) {}
+  }
+  function sbFetch(path, opts = {}) {
+    return fetch(SUPABASE_URL.replace(/\/$/, '') + '/rest/v1/' + path, Object.assign({}, opts, {
+      // 예전 anon 키(eyJ…)는 Authorization 헤더도 함께, 새 publishable 키(sb_publishable_…)는 apikey 헤더만 사용
+      headers: Object.assign({apikey: SUPABASE_KEY, 'Content-Type': 'application/json'},
+        SUPABASE_KEY.startsWith('eyJ') ? {Authorization: 'Bearer ' + SUPABASE_KEY} : {}, opts.headers || {}),
+    }));
+  }
+  async function loadShared() {
+    if (!sb) return;
+    try {
+      const r = await sbFetch('punch_rank?select=player_id,name,score,stage&order=score.desc&limit=100');
+      if (!r.ok) return;
+      const rows = await r.json();
+      sharedRank = rows.map(x => ({id: x.player_id, name: x.name, score: x.score, stage: x.stage}));
+      uid = playerId;
+      myShared = sharedRank.find(x => x.id === playerId) || myShared;
+      refreshRank();
+    } catch (e) {}
+  }
+  if (sb) loadShared();
+
   (async () => {   // 공유 순위 저장소 (안 되면 이 기기 순위만 사용)
     try {
       if (!window.claude || !window.claude.use) return;
@@ -1026,7 +1060,19 @@
     localRank = localRank.slice(0, 30); saveLocal();
     lastRun.registered = true;
     refreshRank();
-    if (db && uid && sharedWritable) {
+    if (sb) {
+      // 더 높은 점수이거나 이름을 바꿨을 때만 한 줄 추가 (랭킹은 사람마다 최고 점수 + 최신 이름)
+      const prev = myShared ? (+myShared.score || 0) : -1;
+      if (lastRun.score > prev || (myShared && myShared.name !== name)) {
+        const best = Math.max(lastRun.score, prev);
+        const body = {player_id: playerId, name, score: best, stage: best === lastRun.score ? lastRun.stage : (+myShared.stage || 1), max_combo: maxCombo};
+        try {
+          const r = await sbFetch('punch_scores', {method: 'POST', headers: {Prefer: 'return=minimal'}, body: JSON.stringify(body)});
+          if (r.ok) myShared = {id: playerId, name, score: best, stage: body.stage};
+        } catch (e) {}
+        loadShared();
+      }
+    } else if (db && uid && sharedWritable) {
       const prev = myShared ? (+myShared.score || 0) : -1;
       let body = null;
       if (lastRun.score > prev) body = {name, score: lastRun.score, stage: lastRun.stage, at: Date.now()};
