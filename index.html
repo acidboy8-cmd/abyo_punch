@@ -2777,28 +2777,34 @@ window.Fighters = (() => {
   // 새 publishable 키는 apikey 헤더만 보냄 (옛 anon JWT 키일 때만 Authorization 추가)
   const sbHeaders = () => Object.assign({apikey: SB_KEY, 'Content-Type': 'application/json'}, SB_KEY.startsWith('eyJ') ? {Authorization: 'Bearer ' + SB_KEY} : {});
   if (SB_ON) {
-    try { uid = localStorage.getItem('abyo-uid'); } catch (e) {}
+    try { uid = localStorage.getItem('colorgate-pid') || localStorage.getItem('abyo-uid'); } catch (e) {}   // 예전 버전에서 쓰던 아이디를 그대로 이어 씀
     if (!uid) { uid = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); try { localStorage.setItem('abyo-uid', uid); } catch (e) {} }
   }
+  // 기존 punch_scores 테이블 구조: id(자동번호), player_id, name, score, stage, max_combo, created_at
+  // 판마다 한 줄씩 쌓이므로, 사람(player_id)별 최고점만 골라 순위를 만듦
   async function sbLoad() {
     if (!SB_ON) return;
     try {
-      const r = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?select=id,name,score,stage,at&order=score.desc&limit=50`, {headers: sbHeaders()});
+      const r = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?select=player_id,name,score,stage,created_at&order=score.desc,created_at.desc&limit=500`, {headers: sbHeaders()});
       if (!r.ok) return;
-      sharedRank = await r.json();
-      const mine = sharedRank.find(x => x.id === uid);
-      if (mine) myShared = mine;
-      else {
-        const r2 = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?select=id,name,score,stage,at&id=eq.${encodeURIComponent(uid)}`, {headers: sbHeaders()});
-        if (r2.ok) { const a = await r2.json(); if (a[0]) myShared = a[0]; }
+      const rows = await r.json(), by = new Map(), lastName = new Map();
+      for (const x of rows) {
+        const pid = x.player_id || ('row' + Math.random());
+        const t = Date.parse(x.created_at) || 0;
+        if (!lastName.has(pid) || t > lastName.get(pid).t) lastName.set(pid, {t, name: x.name});
+        if (!by.has(pid)) by.set(pid, {id: pid, name: x.name, score: +x.score || 0, stage: +x.stage || 1, at: t});
       }
+      for (const [pid, e] of by) e.name = lastName.get(pid).name;   // 이름은 가장 최근에 등록한 이름으로
+      sharedRank = [...by.values()].sort((a, b) => b.score - a.score).slice(0, 50);
+      const mine = by.get(uid);
+      if (mine) myShared = mine;
       refreshRank();
     } catch (e) {}
   }
   async function sbSave(body) {
-    const r = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}?on_conflict=id`, {
-      method: 'POST', headers: Object.assign(sbHeaders(), {Prefer: 'resolution=merge-duplicates,return=minimal'}),
-      body: JSON.stringify([Object.assign({id: uid}, body)]),
+    const r = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`, {
+      method: 'POST', headers: Object.assign(sbHeaders(), {Prefer: 'return=minimal'}),
+      body: JSON.stringify({player_id: uid, name: body.name, score: body.score, stage: body.stage, max_combo: body.max_combo || 0}),
     });
     if (!r.ok) throw new Error('save ' + r.status);
   }
@@ -2838,8 +2844,8 @@ window.Fighters = (() => {
     if (SB_ON) {
       const prev = myShared ? (+myShared.score || 0) : -1;
       let body = null;
-      if (lastRun.score > prev) body = {name, score: lastRun.score, stage: lastRun.stage, at: Date.now()};
-      else if (myShared && myShared.name !== name) body = {name, score: prev, stage: +myShared.stage || 1, at: +myShared.at || Date.now()};
+      if (lastRun.score > prev) body = {name, score: lastRun.score, stage: lastRun.stage, max_combo: maxCombo};
+      else if (myShared && myShared.name !== name) body = {name, score: prev, stage: +myShared.stage || 1, max_combo: 0};   // 이름만 바꿀 때
       if (body) { try { await sbSave(body); myShared = Object.assign({id: uid}, body); } catch (e) {} }
       sbLoad();
       return;
