@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.abyo.punch",
+      "sha256_cert_fingerprints": [
+        "27:F5:69:3B:13:04:CE:AF:0C:90:04:99:E6:4E:04:D3:19:E4:B8:24:ED:58:A5:08:A1:D6:12:30:C3:FA:DD:06"
+      ]
+    }
+  }
+]
