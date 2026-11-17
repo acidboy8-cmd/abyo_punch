@@ -1293,7 +1293,7 @@ window.Fighters = (() => {
 (() => {
   const RED  = {c:'#ff4d6d', d:'#9e1f3b', l:'#ff9aad', sym:'●', name:'빨강', en:'RED'};
   const BLUE = {c:'#3fa7ff', d:'#1a5590', l:'#96d0ff', sym:'■', name:'파랑', en:'BLUE'};
-  const CEMENT = {c:'#a9aeb6', d:'#6b7078', l:'#d4d8de', name:'시멘트'};
+  const CEMENT = {c:'#7f848c', d:'#4a4e55', l:'#a9aeb6', name:'시멘트'};
   const MARBLE = {c:'#efe6da', d:'#b9ac9a', l:'#ffffff', name:'대리석'};
   const CHIPS = ['#e2725b', '#2f6f73', '#f2b134', '#7a9e7e', '#c94f3d', '#3d3a3a', '#e9a3a1', '#5b7fb5'];
   const MARBLE_HP = 10, FAST_AT = 300;   // 300점부터: 조금 빨라지고 대리석 등장
@@ -1686,7 +1686,7 @@ window.Fighters = (() => {
         vx: Math.cos(a) * v, vy: Math.sin(a) * v - 120,
         rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 30,
         len: 8 + Math.random() * 22, wid: 2 + Math.random() * 3.5,
-        col: d.type === 'marble' ? (i % 3 ? '#efe6da' : CHIPS[i % CHIPS.length]) : d.type === 'block' ? ['#8d929a', '#c9cdd3', '#6b7078'][i % 3] : Math.random() < 0.55 ? d.color.c : (Math.random() < 0.5 ? '#f3d29b' : '#c9925a'),
+        col: d.type === 'marble' ? (i % 3 ? '#efe6da' : CHIPS[i % CHIPS.length]) : d.type === 'block' ? ['#6b7078', '#9a9fa7', '#4a4e55'][i % 3] : Math.random() < 0.55 ? d.color.c : (Math.random() < 0.5 ? '#f3d29b' : '#c9925a'),
         sc: 1, grow: 0.6 + Math.random() * 1.8, life: 0.55 + Math.random() * 0.45,
       });
     }
@@ -2090,15 +2090,22 @@ window.Fighters = (() => {
     poly([[g.x0 - 4, g.yb + 5], [g.x1 + 4, g.yb + 5], [g.bx1 + 4, g.byb + 3], [g.bx0 - 4, g.byb + 3]]); ctx.fill();
     // 앞면 (벽돌 두께 + 줄눈)
     const th = g.yb - g.yt;
-    const fg = ctx.createLinearGradient(0, g.yt, 0, g.yb); fg.addColorStop(0, '#80858d'); fg.addColorStop(1, '#5d6168');
+    const fg = ctx.createLinearGradient(0, g.yt, 0, g.yb); fg.addColorStop(0, '#5c6068'); fg.addColorStop(1, '#3f4248');
     ctx.fillStyle = fg; ctx.fillRect(g.x0, g.yt, g.x1 - g.x0, th);
-    ctx.strokeStyle = 'rgba(40,42,48,.55)'; ctx.lineWidth = Math.max(1, 2 * g.f);
-    ctx.beginPath(); ctx.moveTo(g.x0, g.yt + th / 2); ctx.lineTo(g.x1, g.yt + th / 2);
-    for (let k = 1; k < 4; k++) { const x = g.x0 + (g.x1 - g.x0) * k / 4; ctx.moveTo(x, g.yt); ctx.lineTo(x, g.yt + th / 2); }
-    for (let k = 0; k < 4; k++) { const x = g.x0 + (g.x1 - g.x0) * (k + 0.5) / 4; ctx.moveTo(x, g.yt + th / 2); ctx.lineTo(x, g.yb); }
-    ctx.stroke();
+    // 시멘트 블록 구멍: 가운데 타원 3개 + 양끝 반쪽
+    ctx.save(); ctx.beginPath(); ctx.rect(g.x0, g.yt, g.x1 - g.x0, th); ctx.clip();
+    { const span = g.x1 - g.x0, hw = span * 0.085, hh = th * 0.3, cy = g.yt + th * 0.52;
+      for (const fx of [0, 0.25, 0.5, 0.75, 1]) {
+        const cx = g.x0 + span * fx;
+        ctx.fillStyle = '#25272c'; ctx.beginPath(); ctx.ellipse(cx, cy, hw, hh, 0, 0, Math.PI * 2); ctx.fill();
+        const hg = ctx.createLinearGradient(0, cy - hh, 0, cy + hh); hg.addColorStop(0, 'rgba(0,0,0,.55)'); hg.addColorStop(0.6, 'rgba(0,0,0,0)');
+        ctx.fillStyle = hg; ctx.beginPath(); ctx.ellipse(cx, cy, hw, hh, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = Math.max(1, 1.5 * g.f);
+        ctx.beginPath(); ctx.ellipse(cx, cy, hw, hh, 0, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      } }
+    ctx.restore();
     // 윗면 (거친 시멘트)
-    poly(top); ctx.fillStyle = '#b4b9c1'; ctx.fill();
+    poly(top); ctx.fillStyle = '#7f848c'; ctx.fill();
     const gr = ctx.createLinearGradient(0, g.yt, 0, g.byt); gr.addColorStop(0, 'rgba(255,255,255,.12)'); gr.addColorStop(1, 'rgba(0,0,0,.15)');
     ctx.fillStyle = gr; poly(top); ctx.fill();
     ctx.save(); poly(top); ctx.clip();
@@ -2106,7 +2113,7 @@ window.Fighters = (() => {
     const rnd = () => { sd = (sd * 9301 + 49297) % 233280; return sd / 233280; };
     for (let k = 0; k < 40; k++) {
       const [x, y] = onTop(g, rnd(), rnd());
-      ctx.fillStyle = rnd() < 0.5 ? 'rgba(80,84,92,.35)' : 'rgba(255,255,255,.3)';
+      ctx.fillStyle = rnd() < 0.5 ? 'rgba(45,48,54,.45)' : 'rgba(255,255,255,.22)';
       ctx.beginPath(); ctx.arc(x, y, Math.max(0.6, (1 + rnd() * 1.6) * g.f), 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
@@ -2131,27 +2138,22 @@ window.Fighters = (() => {
   }
 
   // 금 모양 미리 만들기: 맞을 때마다 한 갈래씩 (갈라지는 가지 포함), 좌표는 (v: 왼→오, u: 앞→뒤)
-  function marbleCracks(d) {
+  function marbleCracks(d) {   // 가운데에서 좌우로 뻗는 금
     if (d.cracks) return d.cracks;
     let sd = 991 + d.seed * 7919;
     const rnd = () => { sd = (sd * 9301 + 49297) % 233280; return sd / 233280; };
-    const out = [], pts = [[0.5, 0.5]];
-    for (let k = 0; k < MARBLE_HP; k++) {
-      const st = k === 0 ? [0.5, 0.5] : pts[(rnd() * pts.length) | 0];
-      const group = [];
-      const grow = (v, u, ang, n, w) => {
-        const line = [[v, u]];
-        for (let j = 0; j < n; j++) {
-          ang += (rnd() - 0.5) * 0.9;
-          v += Math.cos(ang) * (0.035 + rnd() * 0.035); u += Math.sin(ang) * (0.08 + rnd() * 0.08);
-          if (v < 0.01 || v > 0.99 || u < 0.01 || u > 0.99) break;
-          line.push([v, u]); pts.push([v, u]);
-          if (n > 3 && j === 1 && rnd() < 0.6) group.push(...grow(v, u, ang + (rnd() < 0.5 ? 1 : -1) * (0.6 + rnd() * 0.5), n - 3, w * 0.7));
-        }
-        return [{line, w}];
-      };
-      group.unshift(...grow(st[0], st[1], rnd() * Math.PI * 2, 5 + ((rnd() * 3) | 0), 1));
-      out.push(group);
+    const out = [];
+    for (const dir of [-1, 1]) {
+      const main = [[0.5, 0.3]]; let v = 0.5, u = 0.3;
+      while (v > 0.02 && v < 0.98) { v += dir * (0.035 + rnd() * 0.025); u += (rnd() - 0.5) * 0.12; u = Math.max(0.12, Math.min(0.48, u)); main.push([Math.max(0.01, Math.min(0.99, v)), u]); }
+      const branches = [];
+      for (let j = 2; j < main.length - 1; j += 2 + ((rnd() * 2) | 0)) {
+        const br = [main[j]]; let bv = main[j][0], bu = main[j][1], side = rnd() < 0.5 ? -1 : 1;
+        const n = 2 + ((rnd() * 3) | 0);
+        for (let q = 0; q < n; q++) { bv += dir * (0.02 + rnd() * 0.025); bu += side * (0.07 + rnd() * 0.06); if (bu < 0.04 || bu > 0.6) break; br.push([bv, bu]); }
+        branches.push({at: j / (main.length - 1), line: br});
+      }
+      out.push({main, branches});
     }
     return (d.cracks = out);
   }
@@ -2178,16 +2180,20 @@ window.Fighters = (() => {
     const fg = ctx.createLinearGradient(0, g.yt, 0, g.yb); fg.addColorStop(0, '#ddd2c3'); fg.addColorStop(1, '#bfb2a0');
     ctx.fillStyle = fg; ctx.fillRect(g.x0, g.yt, g.x1 - g.x0, th);
     ctx.save(); ctx.beginPath(); ctx.rect(g.x0, g.yt, g.x1 - g.x0, th); ctx.clip();
-    for (let k = 0; k < 26; k++) chip(g.x0 + rnd() * (g.x1 - g.x0), g.yt + rnd() * th, (1.5 + rnd() * 2.5) * g.f, CHIPS[(rnd() * CHIPS.length) | 0]);
+    for (let k = 0; k < 14; k++) chip(g.x0 + rnd() * (g.x1 - g.x0), g.yt + rnd() * th, (3.5 + rnd() * 3.5) * g.f, CHIPS[(rnd() * CHIPS.length) | 0]);
     ctx.restore();
     // 윗면
     poly(top);
     const tg = ctx.createLinearGradient(g.x0, g.byt, g.x1, g.yt); tg.addColorStop(0, '#f6efe6'); tg.addColorStop(1, '#e6dccd');
     ctx.fillStyle = tg; ctx.fill();
     ctx.save(); poly(top); ctx.clip();
-    for (let k = 0; k < 90; k++) {
+    for (let k = 0; k < 34; k++) {   // 큰 조각
       const u = rnd(), v = rnd(), [x, y] = onTop(g, u, v), f = g.f + (g.f2 - g.f) * u;
-      chip(x, y, (1.6 + rnd() * 3.6) * f, CHIPS[(rnd() * CHIPS.length) | 0]);
+      chip(x, y, (5 + rnd() * 6) * f, CHIPS[(rnd() * CHIPS.length) | 0]);
+    }
+    for (let k = 0; k < 24; k++) {   // 작은 조각 몇 개
+      const u = rnd(), v = rnd(), [x, y] = onTop(g, u, v), f = g.f + (g.f2 - g.f) * u;
+      chip(x, y, (1.6 + rnd() * 1.6) * f, CHIPS[(rnd() * CHIPS.length) | 0]);
     }
     for (let k = 0; k < 60; k++) { const [x, y] = onTop(g, rnd(), rnd()); ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillRect(x, y, 1.2, 1.2); }
     // 은은한 광택
@@ -2198,19 +2204,33 @@ window.Fighters = (() => {
     const hitN = MARBLE_HP - d.hp;
     if (hitN > 0) {
       const C = marbleCracks(d), P = (v, u) => onTop(g, u, v);
-      for (let k = 0; k < hitN; k++) for (const {line, w} of C[k]) {
-        const fresh = k === hitN - 1 && d.shake > 0;
-        for (const [col, lw, dy] of [['rgba(255,255,255,.55)', 1.1, 1], ['rgba(55,40,35,.88)', 1.8, 0]]) {
-          ctx.strokeStyle = col; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-          for (let j = 1; j < line.length; j++) {
-            const [x0, y0] = P(...line[j - 1]), [x1, y1] = P(...line[j]);
-            ctx.lineWidth = Math.max(0.6, lw * w * (1 - j / (line.length + 1)) * g.f * (fresh ? 1.3 : 1) + 0.4);
-            ctx.beginPath(); ctx.moveTo(x0, y0 + dy); ctx.lineTo(x1, y1 + dy); ctx.stroke();
+      const prog = Math.min(1, hitN / (MARBLE_HP - 1));          // 0 → 1
+      const ease = 0.12 + 0.88 * prog;                             // 금이 뻗은 길이
+      const dark = prog;                                           // 연함 → 진함
+      const r = Math.round(170 - 125 * dark), gg = Math.round(150 - 115 * dark), b = Math.round(140 - 110 * dark);
+      const col = `rgba(${r},${gg},${b},${0.45 + 0.5 * dark})`, wBase = (0.8 + 1.8 * prog) * g.f;
+      const fresh = d.shake > 0 ? 1.25 : 1;
+      const drawPart = (line, frac, w0) => {   // frac: 0~1 만큼만 그림
+        const segs = (line.length - 1) * frac; if (segs <= 0) return;
+        const pts = [P(...line[0])];
+        for (let j = 1; j <= Math.ceil(segs); j++) {
+          const a = P(...line[j - 1]), bb = P(...line[j]), k = Math.min(1, segs - (j - 1));
+          pts.push([a[0] + (bb[0] - a[0]) * k, a[1] + (bb[1] - a[1]) * k]);
+        }
+        for (const [c, lw, dy] of [['rgba(255,255,255,' + (0.25 + 0.3 * dark) + ')', 0.7, 1], [col, 1, 0]]) {
+          ctx.strokeStyle = c; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+          for (let j = 1; j < pts.length; j++) {
+            ctx.lineWidth = Math.max(0.5, w0 * lw * fresh * (1 - 0.6 * j / pts.length));
+            ctx.beginPath(); ctx.moveTo(pts[j - 1][0], pts[j - 1][1] + dy); ctx.lineTo(pts[j][0], pts[j][1] + dy); ctx.stroke();
           }
         }
+      };
+      for (const {main, branches} of C) {
+        drawPart(main, ease, wBase);
+        for (const br of branches) if (ease > br.at) drawPart(br.line, Math.min(1, (ease - br.at) / 0.25), wBase * 0.6);
       }
       // 처음 맞은 자리의 움푹 팬 자국
-      const [cx, cy] = onTop(g, 0.5, 0.5);
+      const [cx, cy] = onTop(g, 0.3, 0.5);
       ctx.fillStyle = `rgba(70,50,40,${Math.min(0.35, 0.05 * hitN)})`; ctx.beginPath(); ctx.ellipse(cx, cy, (4 + hitN * 1.2) * g.f, (2 + hitN * 0.6) * g.f, 0, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
